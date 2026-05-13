@@ -17,6 +17,12 @@
     #mode-badge.playback  { color: #66bb6a; border: 1px solid #66bb6a; }
     @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.45} }
 
+    #gesture-display { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    #gesture-name { font-size: 1.6rem; font-weight: bold; letter-spacing: 0.08em; text-transform: uppercase; min-height: 2rem; transition: color 0.15s; color: #333; }
+    #gesture-name.builtin  { color: #4fc3f7; }
+    #gesture-name.recorded { color: #66bb6a; }
+    #gesture-confidence { font-size: 0.65rem; color: #555; letter-spacing: 0.1em; min-height: 1em; }
+
     .section-label { font-size: 0.7rem; letter-spacing: 0.15em; color: #555; text-transform: uppercase; margin-bottom: 16px; text-align: center; }
 
     /* ── SVG hand ── */
@@ -87,6 +93,12 @@
       <div id="status">connecting...</div>
       <div id="mode-badge">—</div>
     </div>
+  </div>
+
+  <!-- Gesture display -->
+  <div id="gesture-display">
+    <div id="gesture-name">—</div>
+    <div id="gesture-confidence"></div>
   </div>
 
   <!-- Layer 2: SVG hand -->
@@ -253,6 +265,21 @@
         document.getElementById("timestamp").textContent = `t = ${data.timestamp.toFixed(2)}s`;
         modeBadge.textContent = data.mode;
         modeBadge.className = data.mode;
+
+        const g = data.gesture;
+        const nameEl = document.getElementById("gesture-name");
+        const confEl = document.getElementById("gesture-confidence");
+        if (g.gesture) {
+          nameEl.textContent = g.gesture.replace(/_/g, " ");
+          nameEl.className = g.source;
+          confEl.textContent = g.source === "recorded"
+            ? `recorded · ${Math.round(g.confidence * 100)}% match`
+            : "built-in";
+        } else {
+          nameEl.textContent = "—";
+          nameEl.className = "";
+          confEl.textContent = "";
+        }
       };
 
       ws.onclose = () => {

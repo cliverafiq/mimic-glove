@@ -18,11 +18,13 @@ from pipeline.parser import parse
 from pipeline.servo_controller import compute_servo_state
 from pipeline.gesture_recorder import GestureRecorder, playback_producer
 from pipeline.calibration import Calibration
+from pipeline.gesture_recognizer import GestureRecognizer
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 recorder = GestureRecorder()
 calibration = Calibration()
+recognizer = GestureRecognizer()
 cmd_queue: asyncio.Queue = None
 _latest_raw = [2048] * 5  # updated each frame; used by calibration capture
 
@@ -58,6 +60,7 @@ async def record_stop():
         name = recorder.stop()
     except RuntimeError:
         return {"status": "error", "detail": "no active recording"}
+    recognizer.reload()
     await cmd_queue.put({"cmd": "record_stop"})
     return {"status": "saved", "name": name}
 
@@ -71,6 +74,14 @@ async def list_gestures():
 async def start_playback(name: str):
     await cmd_queue.put({"cmd": "playback", "name": name})
     return {"status": "playback", "name": name}
+
+
+# ── Gesture recognition ───────────────────────────────────────────────────────
+
+@app.post("/recognizer/reload")
+async def reload_recognizer():
+    recognizer.reload()
+    return {"status": "reloaded", "known_gestures": list(recognizer._refs.keys())}
 
 
 # ── Calibration ───────────────────────────────────────────────────────────────
@@ -154,11 +165,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 recorder.capture(parsed)
 
             servo_state = compute_servo_state(parsed)
+            gesture = recognizer.recognize(parsed["angles"])
             payload = {
                 "timestamp": parsed["timestamp"],
                 "angles": parsed["angles"],
                 "servos": servo_state["servos"],
                 "mode": mode,
+                "gesture": gesture,
             }
             await websocket.send_text(json.dumps(payload))
 
