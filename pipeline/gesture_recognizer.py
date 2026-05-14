@@ -38,7 +38,7 @@ class GestureRecognizer:
                 n = len(frames)
                 mean = [sum(f["angles"][i] for f in frames) / n for i in range(5)]
                 self._refs[path.stem] = mean
-            except (KeyError, ValueError, json.JSONDecodeError):
+            except (KeyError, IndexError, ValueError, json.JSONDecodeError):
                 pass
 
     def recognize(self, angles: list) -> dict:
@@ -49,12 +49,13 @@ class GestureRecognizer:
 
         # Layer 2: K-NN over recorded gestures
         if self._refs:
-            best_name, best_dist = min(
-                self._refs.items(), key=lambda kv: _euclidean(angles, kv[1])
-            )
+            best_name = min(self._refs, key=lambda n: _euclidean(angles, self._refs[n]))
             best_dist = _euclidean(angles, self._refs[best_name])
             if best_dist <= KNN_THRESHOLD:
                 confidence = round(1.0 - best_dist / KNN_THRESHOLD, 2)
                 return {"gesture": best_name, "source": "recorded", "confidence": confidence}
 
         return {"gesture": None, "source": None, "confidence": 0.0}
+
+    def known_gestures(self) -> list:
+        return list(self._refs.keys())

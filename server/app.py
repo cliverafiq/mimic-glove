@@ -81,7 +81,7 @@ async def start_playback(name: str):
 @app.post("/recognizer/reload")
 async def reload_recognizer():
     recognizer.reload()
-    return {"status": "reloaded", "known_gestures": list(recognizer._refs.keys())}
+    return {"status": "reloaded", "known_gestures": recognizer.known_gestures()}
 
 
 # ── Calibration ───────────────────────────────────────────────────────────────
