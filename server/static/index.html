@@ -248,6 +248,12 @@
       ws.onmessage = (e) => {
         const data = JSON.parse(e.data);
 
+        // Handle server-side error messages
+        if (data.error) {
+          showToast(data.error);
+          return;
+        }
+
         // Animate SVG fingers
         data.angles.forEach((angle, i) => {
           const deg = angle * ANGLE_SCALE[i];
@@ -262,7 +268,7 @@
           document.getElementById(`tick-${i}`).textContent = s.pwm_tick;
         });
 
-        document.getElementById("timestamp").textContent = `t = ${data.timestamp.toFixed(2)}s`;
+        document.getElementById("timestamp").textContent = `t = ${Number(data.timestamp).toFixed(2)}s`;
         modeBadge.textContent = data.mode;
         modeBadge.className = data.mode;
 
@@ -290,6 +296,27 @@
     }
 
     connect();
+
+    // ── Toast notifications ────────────────────────────────
+    function showToast(msg) {
+      let toast = document.getElementById("ws-toast");
+      if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "ws-toast";
+        toast.style.cssText = [
+          "position:fixed", "bottom:24px", "left:50%", "transform:translateX(-50%)",
+          "background:#2a1010", "color:#ef5350", "border:1px solid #ef5350",
+          "border-radius:8px", "padding:8px 18px", "font-size:0.78rem",
+          "font-family:monospace", "z-index:9999", "pointer-events:none",
+          "opacity:0", "transition:opacity 0.2s",
+        ].join(";");
+        document.body.appendChild(toast);
+      }
+      toast.textContent = msg;
+      toast.style.opacity = "1";
+      clearTimeout(toast._hide);
+      toast._hide = setTimeout(() => { toast.style.opacity = "0"; }, 3000);
+    }
 
     async function startRecording() {
       const name = document.getElementById("gesture-name").value.trim().replace(/[^a-zA-Z0-9_-]/g,"_");
