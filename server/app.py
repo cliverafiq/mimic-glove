@@ -26,7 +26,8 @@ recorder = GestureRecorder()
 calibration = Calibration()
 recognizer = GestureRecognizer()
 cmd_queue: asyncio.Queue = None
-_latest_raw = [2048] * 5  # updated each frame; used by calibration capture
+_latest_raw: list[int] = [2048] * 5  # updated each frame; used by calibration capture
+_raw_lock = asyncio.Lock()           # guards _latest_raw across concurrent coroutines
 
 
 @asynccontextmanager
@@ -93,14 +94,18 @@ async def get_calibration():
 
 @app.post("/calibration/capture/flat")
 async def capture_flat():
-    calibration.capture_flat(_latest_raw)
-    return {"status": "ok", "captured": _latest_raw, **calibration.to_dict()}
+    async with _raw_lock:
+        snapshot = list(_latest_raw)
+    calibration.capture_flat(snapshot)
+    return {"status": "ok", "captured": snapshot, **calibration.to_dict()}
 
 
 @app.post("/calibration/capture/fist")
 async def capture_fist():
-    calibration.capture_fist(_latest_raw)
-    return {"status": "ok", "captured": _latest_raw, **calibration.to_dict()}
+    async with _raw_lock:
+        snapshot = list(_latest_raw)
+    calibration.capture_fist(snapshot)
+    return {"status": "ok", "captured": snapshot, **calibration.to_dict()}
 
 
 @app.post("/calibration/save")
@@ -132,12 +137,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     if cmd["cmd"] == "playback":
                         try:
                             frames = recorder.load(cmd["name"])
-                        except FileNotFoundError:
-                            frames = None
-                        if frames:
                             producer.cancel()
                             producer = asyncio.create_task(playback_producer(frames, queue))
                             mode = "playback"
+                        except FileNotFoundError:
+                            await websocket.send_text(json.dumps({
+                                "error": f"gesture '{cmd['name']}' not found"
+                            }))
                     elif cmd["cmd"] == "record_start":
                         mode = "recording"
                     elif cmd["cmd"] == "record_stop":
@@ -158,7 +164,8 @@ async def websocket_endpoint(websocket: WebSocket):
             if packet.get("_pre_parsed"):
                 parsed = {"timestamp": packet["timestamp"], "angles": packet["angles"]}
             else:
-                _latest_raw[:] = packet["channels"]
+                async with _raw_lock:
+                    _latest_raw[:] = packet["channels"]
                 parsed = parse(packet, calibration.values)
 
             if recorder.is_recording:
